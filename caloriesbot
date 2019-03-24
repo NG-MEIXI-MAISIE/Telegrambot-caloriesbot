@@ -1,0 +1,178 @@
+import telepot
+import time
+import urllib3
+from telepot.namedtuple import InlineKeyboardMarkup, InlineKeyboardButton
+
+
+# You can leave this bit out if you're using a paid PythonAnywhere account
+proxy_url = "http://proxy.server:3128"
+telepot.api._pools = {
+    'default': urllib3.ProxyManager(proxy_url=proxy_url, num_pools=3, maxsize=10, retries=False, timeout=30),
+}
+telepot.api._onetime_pool_spec = (urllib3.ProxyManager, dict(proxy_url=proxy_url, num_pools=1, maxsize=1, retries=False, timeout=30))
+# end of the stuff that's only needed for free accounts
+
+bot = telepot.Bot('336450446:AAFrxTig2UNgJIOEqioWrpEQW7LFr7TVP58')
+
+
+track=dict()
+
+def handle(raw_msg):
+    content_type, chat_type, chat_id = telepot.glance(raw_msg)
+    print(content_type, chat_type, chat_id)
+
+    if content_type == 'text':
+        message = raw_msg["text"]
+
+        if message == '/start' or message=='N':
+            bot.sendMessage(chat_id, start_message)
+            on_chat_message(chat_id)
+
+        elif message=='Create' or message=='create':
+            create(chat_id)
+
+        elif message=='Reset' or message== 'reset':
+            reset(chat_id)
+
+        elif message=='balance' or message=="Balance":
+            check_balance(chat_id)
+
+        elif message=='Y':
+            track["balance"]=0
+            bot.sendMessage(chat_id, "As requested, I have created a new account for you! Type a figure to update your account.")
+
+        elif message=="delete" or message =="Delete":
+            deleter(chat_id)
+
+        else:
+            update_tracker(message, chat_id)
+
+
+
+
+def on_chat_message(chat_id):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                   [InlineKeyboardButton(text='Create Account', callback_data='Create Account')],
+                   [InlineKeyboardButton(text='Update Account', callback_data='Update Account')],
+                   [InlineKeyboardButton(text='Reset', callback_data='Reset')],
+                   [InlineKeyboardButton(text='Balance', callback_data='Balance')],
+                   [InlineKeyboardButton(text='Delete Account', callback_data='Delete Account')],
+
+               ])
+
+    bot.sendMessage(chat_id, 'Please pick one of the following.', reply_markup=keyboard)
+
+def on_callback_query(raw_msg):
+    query_id, from_id, query_data = telepot.glance(raw_msg, flavor='callback_query')
+    #print('Callback Query:', query_id, from_id, query_data)
+
+    bot.answerCallbackQuery(query_id, text='Processing...')
+    if query_data == 'Create Account':
+        create(from_id)
+        #print(raw_msg)
+    elif query_data == 'Reset':
+        reset(from_id)
+    elif query_data == 'Balance':
+        check_balance(from_id)
+    elif query_data == 'Update Account':
+        update_tracker(raw_msg.get('text'),from_id)
+        bot.sendMessage(from_id, 'To update, please type a figure.')
+    elif query_data == 'Delete Account':
+        deleter(from_id)
+    elif query_data == 'Create':
+        track["balance"]=0
+        bot.sendMessage(from_id, "As requested, I have created a new account for you! Type a figure to update your account.")
+    elif query_data == 'Back':
+        on_chat_message(from_id)
+
+
+
+
+def reset(chat_id):
+    if "balance" in track.keys():
+        count=0
+        track["balance"]=count
+        print (track["balance"])
+        bot.sendMessage(chat_id, "Clearing all data...You now have " +str(track["balance"])+ " calories in deficit.\nWhat else can I do for you?")
+        on_chat_message(chat_id)
+    else:
+        bot.sendMessage(chat_id, "No account found. Please type 'create' to create one.")
+
+def update_tracker(message,chat_id):
+    if "balance" in track.keys():
+        current= track["balance"]
+        if message != None and message.isdigit()==True:
+            new=int(message)
+            current+=new
+            track["balance"]=current
+            #print (track["balance"])
+            bot.sendMessage(chat_id, "You have " +str(track["balance"])+ " calories in deficit. \nWhat else can I do for you?" )
+            on_chat_message(chat_id)
+        elif message !=None and message.isdigit()==False:
+            if message.lstrip('-').isdigit()==True:
+                abs_new=int(message.lstrip('-'))
+                current -=abs_new
+                track["balance"]=current
+                bot.sendMessage(chat_id, "You have " +str(track["balance"])+ " calories in deficit.\nWhat else can I do for you?")
+                on_chat_message(chat_id)
+            else:
+                bot.sendMessage(chat_id, "Please type a number.")
+    else:
+        bot.sendMessage(chat_id, "No account found. Please create one before proceeding.")
+
+def create(chat_id):
+    if track=={}:
+        track["balance"]=0
+        bot.sendMessage(chat_id, "Your account has just been created! Please type a number to update.")
+    else:
+        bot.sendMessage(chat_id, "You have an existing account.Choosing 'create' will erase all data of that account. Are you sure you want to continue?")
+        create_confirmation(chat_id)
+
+
+
+def check_balance(chat_id):
+    if "balance" in track.keys():
+        print (track["balance"])
+        bot.sendMessage(chat_id, "You have " +str(track["balance"])+ " calories in deficit.\nWhat else can I do for you?")
+        on_chat_message(chat_id)
+    else:
+        bot.sendMessage(chat_id, "No account found. Please type 'create' to create one.")
+
+
+
+
+
+def deleter(chat_id):
+    if "balance" in track.keys():
+        bot.sendMessage(chat_id, "Your account has been deleted.\nWhat else can I do for you?")
+        #del track['balance']
+        on_chat_message(chat_id)
+        #print (track['balance'])
+    else:
+        bot.sendMessage(chat_id, "No account found. Please type 'create' to create one.")
+
+def create_confirmation(chat_id):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                   [InlineKeyboardButton(text='Create', callback_data='Create')],
+                   [InlineKeyboardButton(text='Back', callback_data='Back')],
+
+               ])
+
+    bot.sendMessage(chat_id, 'Please pick one of the following.', reply_markup=keyboard)
+
+
+
+
+
+start_message = "Hello, I am Netty, your personal calories tracker. I will be keeping a record of your calories deficit. \nHow may I help you?"
+
+
+
+
+bot.message_loop({'chat': handle, 'callback_query': on_callback_query})
+
+print ('Listening ...')
+
+# Keep the program running.
+while 1:
+    time.sleep(10)
